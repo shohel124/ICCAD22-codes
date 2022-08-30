@@ -16,6 +16,7 @@ def main():
 
     spice_file = "../benchmarks/%s.spice"%design
     spice_current_file = "../benchmarks/%s.out"%design
+    voltage_file = "../benchmarks/%s.solution"%design
 
 # tt= time()
 # design = "ibmpg2"
@@ -25,6 +26,7 @@ def main():
 
     st1= time()
     edges, pg_unit = parser.parse_benchmark(design, spice_file, spice_current_file)
+    edges = parser.parse_voltages(voltage_file, edges, node_edge_dict)
     et1 = time()
 
 
@@ -119,7 +121,53 @@ def main():
             err.append(graph_no)
         end = time()
         Krylov_time = Krylov_time + end - begin
+        
+        # steady-state stress computation
+        AA, QQ = EM.VBEM(graph)
+        for key in graph:
+            #graph[key]['stress_J'] = Q/A - graph[key]['BP']
+            graph[key]['stress_V'] = (beta/rho)*(QQ/AA - graph[key]['voltage'])
 
+        
+        # transient stress estimation using model-order reduction
+        stress = np.zeros((nwire+1,3))
+        time_eval = 1e8
+        for n in range(nwire+1):
+            for m in range(order):
+                if D[m] != 0:
+                    q = 1/D[m]
+                    if np.isreal(D[m]) == True:
+                         val = np.real(r[n,m])*(1 - math.exp(-time_eval*kappa*scale*q))
+                         stress[n,0] = stress[n,0] + val
+                         #print(val)
+                     else:
+                         re_r = abs (np.real(r[n,m]))
+                         im_r = abs (np.imag(r[n,m]))
+                         re_q = abs(np.real(q));
+                         im_q = abs(np.imag(q));
+
+                         val = np.real(r[n,m]) - math.exp(-time_eval*kappa*scale*re_q) * (
+                         re_r* np.cos(time_eval*kappa*scale*im_q) +
+                         im_r* np.sin(time_eval*kappa*scale*im_q) )
+
+                         stress[n,0] = stress[n,0] + val 
+                         #print(val)
+
+        local_dict = {} 
+        for key in graph:
+            if graph[key]['wire_end']==1:
+                value = graph[key]['wire_end_id']
+                local_dict[value]={}
+                local_dict[value]['loc'] = key
+        
+        for n in range(nwire+1):
+            loc = local_dict[n]['loc']
+            #stress[n,1] = graph[loc]['stress_J']
+            stress[n,1] = graph[loc]['stress_V']
+            idx = graph[loc]['id']
+            stress[n,2] = Allmoments[idx,0]
+            
+            
     print("Time to parse: %d"%(et1-st1))
     print("Time to create data structure: %d"%(et2-st2))
     print("Time to traverse disconnected: %d"%(et3-st3))
