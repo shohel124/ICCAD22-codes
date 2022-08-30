@@ -11,6 +11,10 @@ def build_matrix(nseg, nwire, graph, scale):
     L = np.zeros((nseg+1,nwire+1))
     J = np.zeros(nseg+1)
 
+    rowG = []
+    colG = []
+    dataG = []
+    
 #    scale = 1e9 #C matrix scale factor
     for key in graph:
         i = graph[key]['id']
@@ -20,10 +24,39 @@ def build_matrix(nseg, nwire, graph, scale):
             dx = graph[key]['right_len']
             Gval = 1/dx
             Cval = 0.5*scale*dx
-            G[i,i] = G[i,i] + Gval
-            G[k,k] = G[k,k] + Gval
-            G[i,k] = G[i,k] - Gval
-            G[k,i] = G[k,i] - Gval
+            
+            #G[i,i] = G[i,i] + Gval
+            #G[k,k] = G[k,k] + Gval
+            #G[i,k] = G[i,k] - Gval
+            #G[k,i] = G[k,i] - Gval
+
+            if i != nseg: # skipping the last row from putiing stamps
+                rowG.append(i)
+                colG.append(i)
+                dataG.append(Gval)            
+    
+                rowG.append(i)
+                colG.append(k)
+                dataG.append(-Gval)
+            
+            if k != nseg: # skipping the last row from putiing stamps
+                rowG.append(k)
+                colG.append(k)
+                dataG.append(Gval)
+                            
+                rowG.append(k)
+                colG.append(i)
+                dataG.append(-Gval)            
+
+            # putting C values in last row of G (mass-balance eqn)
+            rowG.append(nseg)
+            colG.append(i)
+            dataG.append(Cval)
+            
+            rowG.append(nseg)
+            colG.append(k)
+            dataG.append(Cval)                
+                
             C[i] = C[i] + Cval
             C[k] = C[k] + Cval
 
@@ -32,10 +65,38 @@ def build_matrix(nseg, nwire, graph, scale):
             dx = graph[key]['top_len']
             Gval = 1/dx
             Cval = 0.5*scale*dx
-            G[i,i] = G[i,i] + Gval
-            G[k,k] = G[k,k] + Gval
-            G[i,k] = G[i,k] - Gval
-            G[k,i] = G[k,i] - Gval
+            #G[i,i] = G[i,i] + Gval
+            #G[k,k] = G[k,k] + Gval
+            #G[i,k] = G[i,k] - Gval
+            #G[k,i] = G[k,i] - Gval
+            
+            if i != nseg: # skipping the last row from putiing stamps
+                rowG.append(i)
+                colG.append(i)
+                dataG.append(Gval)            
+    
+                rowG.append(i)
+                colG.append(k)
+                dataG.append(-Gval)
+            
+            if k != nseg: # skipping the last row from putiing stamps
+                rowG.append(k)
+                colG.append(k)
+                dataG.append(Gval)
+                            
+                rowG.append(k)
+                colG.append(i)
+                dataG.append(-Gval)            
+            
+            # putting C values in last row of G (mass-balance eqn)
+            rowG.append(nseg)
+            colG.append(i)
+            dataG.append(Cval)
+            
+            rowG.append(nseg)
+            colG.append(k)
+            dataG.append(Cval)
+            
             C[i] = C[i] + Cval
             C[k] = C[k] + Cval
 
@@ -56,7 +117,8 @@ def build_matrix(nseg, nwire, graph, scale):
 
 # Replacing the last row in G, C matrices to avoid singularity
 ##C[-1] = 0 # last row of C do not need to be forced to zero, skipped during iterations in matrix operations
-    G[-1,:] = C
+    #G[-1,:] = C
+    G = csr_matrix((dataG, (rowG, colG)))
     J[-1]=0 #replacing last row in J with 0
 
     return G,C,L,J
@@ -108,7 +170,11 @@ def BFS(graph, start_node):
 def calculate_moments(nseg, graph, order, C, topo_sort):
 
     moment = np.zeros((order, nseg+1))
+    
     for l in range(order) :
+        FT_flag = np.zeros(nseg+1) # flag for forward traversal
+        RT_flag = np.zeros(nseg+1) # flag for reverse traversal
+        
         j = np.zeros(nseg)
         offset = np.zeros(nseg+1)
         jj = np.zeros(nseg+1)
@@ -121,58 +187,143 @@ def calculate_moments(nseg, graph, order, C, topo_sort):
             for i in reversed(range(1,nseg + 1)):
                 k = topo_sort[i]
                 index = int(graph[k]['id'])
-    #            print(index, k)
-
-                if 'right' not in graph[k] and 'bottom' not in graph[k]:
-                    jj[index] = j[index]
-
-                if 'right' in graph[k] and 'bottom' not in graph[k]:
+                jj[index] = j[index]
+                
+                if 'right' in graph[k] :
                     right_index = int(graph[graph[k]['right']]['id'])
-                    jj[index] = j[index] + jj[right_index]
-
-                if 'right' not in graph[k] and 'bottom' in graph[k]:
+                    if RT_flag[right_index] == 1:
+                        jj[index] += jj[right_index]
+                        
+                if 'left' in graph[k] :
+                    left_index = int(graph[graph[k]['left']]['id'])
+                    if RT_flag[left_index] == 1:
+                        jj[index] += jj[left_index]
+                        
+                if 'bottom' in graph[k]:
                     bottom_index = int(graph[graph[k]['bottom']]['id'])
-                    jj[index] = j[index] + jj[bottom_index]
-
-                if 'right' in graph[k] and 'bottom' in graph[k]:
-                    right_index = int(graph[graph[k]['right']]['id'])
-                    bottom_index = int(graph[graph[k]['bottom']]['id'])
-                    jj[index] = j[index] + jj[right_index] + jj[bottom_index]
-
-        for i in range(nseg):
-            k = topo_sort[i+1]
+                    if RT_flag[bottom_index] == 1:
+                        jj[index] += jj[bottom_index]
+    
+                if 'top' in graph[k] :
+                    top_index = int(graph[graph[k]['top']]['id'])
+                    if RT_flag[top_index] == 1:
+                        jj[index] += jj[top_index]
+    
+                RT_flag[index] = 1
+                
+                
+            k = topo_sort[0]
             index = int(graph[k]['id'])
+            FT_flag[index] = 1
+            
+            for i in range(nseg):
+                k = topo_sort[i+1]
+                index = int(graph[k]['id'])
+                
+                if 'left' in graph[k]:
+                    left_index = int(graph[graph[k]['left']]['id'])
+                    if FT_flag[left_index] == 1:
+                        length = graph[graph[k]['left']]['right_len'] #L
+                        if l==0:
+                            cur_den = graph[graph[k]['left']]['right_cur'] #beta*j
+                            offset[index] = offset[left_index] - cur_den*length
+                        else:
+                            offset[index] = offset[left_index] - jj[index]*length
+                            
+                if 'top' in graph[k] :
+                    top_index = int(graph[graph[k]['top']]['id'])
+                    if FT_flag[top_index] == 1:
+                        length = graph[graph[k]['top']]['bottom_len'] #L
+                        if l==0:
+                            cur_den = graph[graph[k]['top']]['bottom_cur'] #beta*j
+                            offset[index] = offset[top_index] - cur_den*length
+                        else:
+                            offset[index] = offset[top_index] - jj[index]*length
+    
+                if 'right' in graph[k] :
+                    right_index = int(graph[graph[k]['right']]['id'])
+                    if FT_flag[right_index] == 1:
+                        length = graph[graph[k]['right']]['left_len'] #L
+                        if l==0:
+                            cur_den = graph[graph[k]['right']]['left_cur'] #beta*j
+                            offset[index] = offset[right_index] - cur_den*length
+                        else:
+                            offset[index] = offset[right_index] - jj[index]*length
+    
+                if 'bottom' in graph[k] :
+                    bottom_index = int(graph[graph[k]['bottom']]['id'])
+                    if FT_flag[bottom_index] == 1:
+                        length = graph[graph[k]['bottom']]['top_len'] #L
+                        if l==0:
+                            cur_den = graph[graph[k]['bottom']]['top_cur'] #beta*j
+                            offset[index] = offset[bottom_index] - cur_den*length
+                        else:
+                            offset[index] = offset[bottom_index] - jj[index]*length
+    
+                FT_flag[index] = 1
+    
+            RHS = -np.dot(C, offset)
+            LHS = np.sum(C)
+            moment[l,:] = RHS/LHS + offset
+
+    Allmoments = moment.transpose()
+    
+    return Allmoments 
+
+                #if 'right' not in graph[k] and 'bottom' not in graph[k]:
+                #    jj[index] = j[index]
+
+                #if 'right' in graph[k] and 'bottom' not in graph[k]:
+                #    right_index = int(graph[graph[k]['right']]['id'])
+                #    jj[index] = j[index] + jj[right_index]
+
+                #if 'right' not in graph[k] and 'bottom' in graph[k]:
+                #    bottom_index = int(graph[graph[k]['bottom']]['id'])
+                #    jj[index] = j[index] + jj[bottom_index]
+
+                #if 'right' in graph[k] and 'bottom' in graph[k]:
+                #    right_index = int(graph[graph[k]['right']]['id'])
+                #    bottom_index = int(graph[graph[k]['bottom']]['id'])
+                #    jj[index] = j[index] + jj[right_index] + jj[bottom_index]
+                
+                
+
+                
+                
+#        for i in range(nseg):
+#            k = topo_sort[i+1]
+#            index = int(graph[k]['id'])
 
 
-            if 'left' in graph[k]:
-
-                left_index = int(graph[graph[k]['left']]['id'])
-                length = graph[graph[k]['left']]['right_len'] #L
-
-                if l==0:
-                    cur_den = graph[graph[k]['left']]['right_cur'] #beta*j
-                    offset[index] = offset[left_index] - cur_den*length
-
-                else:
-                    offset[index] = offset[left_index] - jj[index]*length
-
-            if 'top' in graph[k] :
-
-                top_index = int(graph[graph[k]['top']]['id'])
-                length = graph[graph[k]['top']]['bottom_len'] #L
-
-                if l==0:
-                    cur_den = graph[graph[k]['top']]['bottom_cur'] #beta*j
-                    offset[index] = offset[top_index] - cur_den*length
-
-                else:
-                    offset[index] = offset[top_index] - jj[index]*length
-
-        RHS = -np.dot(C, offset)
-        LHS = np.sum(C)
-        moment[l,0]=RHS/LHS
-
-        moment[l,:] = moment[l,0] + offset
+#           if 'left' in graph[k]:
+#
+#                left_index = int(graph[graph[k]['left']]['id'])
+#                length = graph[graph[k]['left']]['right_len'] #L
+#
+#                if l==0:
+#                    cur_den = graph[graph[k]['left']]['right_cur'] #beta*j
+#                    offset[index] = offset[left_index] - cur_den*length
+#
+#                else:
+#                    offset[index] = offset[left_index] - jj[index]*length
+#
+#            if 'top' in graph[k] :
+#
+#                top_index = int(graph[graph[k]['top']]['id'])
+#                length = graph[graph[k]['top']]['bottom_len'] #L
+#
+#                if l==0:
+#                    cur_den = graph[graph[k]['top']]['bottom_cur'] #beta*j
+#                    offset[index] = offset[top_index] - cur_den*length
+#
+#                else:
+#                    offset[index] = offset[top_index] - jj[index]*length
+#
+#        RHS = -np.dot(C, offset)
+#        LHS = np.sum(C)
+#        moment[l,0]=RHS/LHS
+#
+#        moment[l,:] = moment[l,0] + offset
        # if len(graph) ==3:
        #   print("Order:",l)
        #   print("J:\n",j)
@@ -180,9 +331,9 @@ def calculate_moments(nseg, graph, order, C, topo_sort):
        #   print("moment:\n",moment)
        #   print("offset:\n",offset)
        #   print("#######")
-    Allmoments = moment.transpose()
+#    Allmoments = moment.transpose()
 
-    return Allmoments
+#    return Allmoments
 
 def Krylov_subspace(nseg, nwire, order, Allmoments, G, C, L, J, g_len,graph,topo_sort):
     err_flag = 0
@@ -278,3 +429,64 @@ def Krylov_subspace(nseg, nwire, order, Allmoments, G, C, L, J, g_len,graph,topo
           
     # return err_flag
     return D, r, err_flag, relaunch
+
+def BFS_DAC21(graph, start_node):
+
+    # Mark all the vertices as not visited
+    node_no = len(graph)
+    visited = [False]*node_no
+    queue = []
+    BFsort = []
+    A = 0
+    Q = 0
+
+    queue.append(start_node) # (starting node)
+    start_node_id = int(graph[start_node]['id'])
+
+    visited[start_node_id] = True
+    graph[start_node]['BP'] = 0
+
+    while queue:
+        v = queue.pop(0)
+        BFsort.append(v)
+
+        if 'right' in graph[v]:
+            i = graph[graph[v]['right']]['id']
+            if visited[i] == False:
+                queue.append(graph[v]['right'])
+                visited[i] = True
+                A = A + graph[v]['right_len']
+                graph[graph[v]['right']]['BP'] = graph[v]['BP'] + graph[v]['right_len']*graph[v]['right_cur']
+                Q = Q + graph[v]['BP'] * graph[v]['right_len'] + 0.5*graph[v]['right_cur']*graph[v]['right_len']*graph[v]['right_len']
+
+        if 'left' in graph[v]:
+            i = graph[graph[v]['left']]['id']
+            if visited[i] == False:
+                queue.append(graph[v]['left'])
+                visited[i] = True
+                A = A + graph[v]['left_len']
+                graph[graph[v]['left']]['BP'] = graph[v]['BP'] + graph[v]['left_len']*graph[v]['left_cur']
+                Q = Q + graph[v]['BP'] * graph[v]['left_len'] + 0.5*graph[v]['left_cur']*graph[v]['left_len']*graph[v]['left_len']
+
+        if 'bottom' in graph[v]:
+            i = graph[graph[v]['bottom']]['id']
+            if visited[i] == False:
+                queue.append(graph[v]['bottom'])
+                visited[i] = True
+                A = A + graph[v]['bottom_len']
+                graph[graph[v]['bottom']]['BP'] = graph[v]['BP'] + graph[v]['bottom_len']*graph[v]['bottom_cur']
+                Q = Q + graph[v]['BP'] * graph[v]['bottom_len'] + 0.5*graph[v]['bottom_cur']*graph[v]['bottom_len']*graph[v]['bottom_len']
+
+        if 'top' in graph[v]:
+            i = graph[graph[v]['top']]['id']
+            if visited[i] == False:
+                queue.append(graph[v]['top'])
+                visited[i] = True
+                A = A + graph[v]['top_len']
+                graph[graph[v]['top']]['BP'] = graph[v]['BP'] + graph[v]['top_len']*graph[v]['top_cur']
+                Q = Q + graph[v]['BP'] * graph[v]['top_len'] + 0.5*graph[v]['top_cur']*graph[v]['top_len']*graph[v]['top_len']
+
+    # print(A)
+    # print(Q)
+    
+    return BFsort, A, Q
