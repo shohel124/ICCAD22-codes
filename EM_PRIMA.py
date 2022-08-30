@@ -354,7 +354,8 @@ def Krylov_subspace(nseg, nwire, order, Allmoments, G, C, L, J, g_len,graph,topo
 
       X = Xall
       Xt = np.transpose(X)
-      P = np.matmul(G,X)
+      #P = np.matmul(G,X)
+      P = G @ X
       Gnew = np.matmul(Xt,P)
       #if g_len == 3:
       #  print("modified G mat")
@@ -490,3 +491,22 @@ def BFS_DAC21(graph, start_node):
     # print(Q)
     
     return BFsort, A, Q
+
+def VBEM(graph):
+    AA = 0
+    QQ = 0
+    for key in graph:
+        if 'top' in graph[key]:
+            AA = AA + graph[key]['top_len']
+            QQ = QQ + graph[key]['top_len'] * 0.5*( graph[key]['voltage'] + graph[graph[key]['top']]['voltage'] )  
+        if 'bottom' in graph[key]:
+            AA = AA + graph[key]['bottom_len']
+            QQ = QQ + graph[key]['bottom_len'] * 0.5*( graph[key]['voltage'] + graph[graph[key]['bottom']]['voltage'] )
+        if 'left' in graph[key]:
+            AA = AA + graph[key]['left_len']
+            QQ = QQ + graph[key]['left_len'] * 0.5*( graph[key]['voltage'] + graph[graph[key]['left']]['voltage'] )
+        if 'right' in graph[key]:
+            AA = AA + graph[key]['right_len']
+            QQ = QQ + graph[key]['right_len'] * 0.5*( graph[key]['voltage'] + graph[graph[key]['right']]['voltage'] )
+            
+    return AA, QQ
