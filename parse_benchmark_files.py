@@ -301,7 +301,7 @@ def parse_benchmark(design, spice_file, spice_out_file):
       voltage = unit_convert(voltage)
       power   = unit_convert(power)
       #Store current density
-      edge['current'] = -1*current/(edge['width']*edge['thickness'])
+      #edge['current'] = -1*current/(edge['width']*edge['thickness'])
       edge['voltage_drop'] = voltage
       edge['power']   = power
   print("Completed output file")
@@ -460,3 +460,31 @@ def create_disconnected_graphs(layer_graph):
       end_nodes.append(end_branch)
       trees_all.append(tree)
   return graphs_all, n_end_nodes, trees_all, end_branch
+
+def parse_voltages(voltage_file, edges, node_edge_dict):
+  print("Starting voltage file")
+  with open(voltage_file) as fp:
+    for line in fp:
+      words = line.split()
+      loc_str = words[0]
+      voltage = float(words[1])
+      m = re.search("^(n\d+)_(\d+)_(\d+)",loc_str)
+      if m is not None:
+
+        if loc_str in node_edge_dict:
+          edge_key = node_edge_dict[loc_str]
+          
+          for i in range(len(edge_key)):
+              edge = edge_key[i]
+              if edges[edge]['node1'] == loc_str :
+                  edges[edge]['v1'] = voltage
+              if edges[edge]['node2'] == loc_str :
+                  edges[edge]['v2'] = voltage
+                  
+      else: #for _x_ we ignore
+        continue
+  #Store current density  
+  for key in edges:
+      edges[key]['current'] = (edges[key]['v2'] - edges[key]['v1'])/(rho*edges[key]['length'])
+
+  return edges
