@@ -225,14 +225,14 @@ def parse_benchmark(design, spice_file, spice_out_file):
           continue
         else:
           pass
-        width = ibm_benchmark_widths[design][layer_name]
+        #width = ibm_benchmark_widths[design][layer_name]
         ###################################
         # Al vs Cu
         ###################################
-        if design != 'unit_test':
-            width = width*2.25/2.67
+        #if design != 'unit_test':
+        #    width = width*2.25/2.67
         ###################################
-        thickness = ibm_benchmark_thickness[design][layer_name] 
+        #thickness = ibm_benchmark_thickness[design][layer_name] 
         resistance = float(words[3])
 
         if design == 'ibmpg3' or design == 'ibmpg6':
@@ -240,6 +240,9 @@ def parse_benchmark(design, spice_file, spice_out_file):
           length =length/1000 # convert to um from nm
         else:
           pg_unit = 1e6
+          
+        WT = 2.25e-8*length*1e-6/resistance
+        
         if cir_type != 'V': # 0 resistance via so dont create node or edge
           edges[name] = {}
           edges[name]['net'] = net_name1
@@ -248,13 +251,23 @@ def parse_benchmark(design, spice_file, spice_out_file):
           edges[name]['loc'] = (x_loc1,y_loc1) 
           edges[name]['loc2'] = (x_loc2,y_loc2) 
           edges[name]['length'] = length * 1e-6 # um
-          edges[name]['width'] = width*1e-6 # um
-          edges[name]['thickness'] = thickness*1e-6 # um
+          edges[name]['WT'] = WT
+          #edges[name]['width'] = width*1e-6 # um
+          #edges[name]['thickness'] = thickness*1e-6 # um
           edges[name]['res'] = resistance
           edges[name]['layer'] = layer_name
           edges[name]['current'] = 0
           edges[name]['voltage_drop'] = 0
           edges[name]['power']   = 0
+  
+          if loc_str1 not in node_edge_dict:
+              node_edge_dict [loc_str1] = []
+          node_edge_dict [loc_str1].append(name)
+    
+          if loc_str2 not in node_edge_dict:
+              node_edge_dict [loc_str2] = []
+          node_edge_dict [loc_str2].append(name)
+  
   print("Completed parsing spice file, starting outputfile")
   with open(spice_out_file) as fp: 
     resistors = 0
