@@ -155,6 +155,7 @@ def parse_benchmark(design, spice_file, spice_out_file):
   node_id = 0
   net_nodes = {}
   via_nets = []
+  node_edge_dict = {}
 
   with open(spice_file) as fp:
     for line in fp:
