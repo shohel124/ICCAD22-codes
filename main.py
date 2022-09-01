@@ -16,6 +16,8 @@ def main():
 
     spice_file = "../benchmarks/%s.spice"%design
     spice_current_file = "../benchmarks/%s.out"%design
+    voltage_file = "../benchmarks/%s.solution"%design
+
 
 # tt= time()
 # design = "ibmpg2"
@@ -24,7 +26,8 @@ def main():
 # spice_current_file = "%s.out"%design
 
     st1= time()
-    edges, pg_unit = parser.parse_benchmark(design, spice_file, spice_current_file)
+    edges, node_edge_dict, pg_unit = parser.parse_benchmark(design, spice_file, spice_current_file)
+    edges = parser.parse_voltages(voltage_file, edges, node_edge_dict)
     et1 = time()
 
 
@@ -119,7 +122,7 @@ def main():
             err.append(graph_no)
         end = time()
         Krylov_time = Krylov_time + end - begin
-
+            
     print("Time to parse: %d"%(et1-st1))
     print("Time to create data structure: %d"%(et2-st2))
     print("Time to traverse disconnected: %d"%(et3-st3))
