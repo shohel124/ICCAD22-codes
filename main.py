@@ -67,6 +67,9 @@ def main():
     err_count = 0
     err = []
     relaunched = []
+    mismatch = []
+    mortal_no = 0
+    mortal_stress_values = []
 
     for graph_no in trange(len(graphs_all)):
     #for graph_no in range(0,1):
@@ -122,7 +125,49 @@ def main():
             err.append(graph_no)
         end = time()
         Krylov_time = Krylov_time + end - begin
+
+        # A local dictionary has been created to obtain the node_location from wire_end_id
+        local_dict = {} 
+        for key in graph:
+            if graph[key]['wire_end']==1:
+                value = graph[key]['wire_end_id']
+                local_dict[value]={}
+                local_dict[value]['loc'] = key
+        
+        # steady-state stress computation
+        AA, QQ = EM.VBEM(graph)
+        for key in graph:
+            # graph[key]['stress_J'] = Q/A - graph[key]['BP']
+            graph[key]['stress_V'] = (beta/rho)*(QQ/AA - graph[key]['voltage'])
+    
+        # transient stress computation
+        time_eval = 1e15
+        stress = np.zeros((nwire+1, 3))
+      
+        for n in range(nwire+1):
+            for m in range(order):
+                if D[m] != 0:
+                    stress[n,2] = stress[n,2] + r[n,m]*(1 - math.exp(-time_eval*kappa*scale/D[m]))
             
+        for n in range(nwire+1):
+            loc = local_dict[n]['loc']
+            stress[n,1] = graph[loc]['stress_V']
+            idx = graph[loc]['id']
+            stress[n,0] = Allmoments[idx,0]
+        
+        # comparing steady-state stress (TCAD-21) vs m0 values (ICCAD 22)
+        for n in range(nwire+1):
+            if abs(stress[n,1] - stress[n,0]) > 1e0:
+                mismatch.append(graph_no)
+                break
+    
+        # counting nodes with above-critical stress
+        for key in graph:
+            if graph[key]['wire_end']==1:
+                if graph[key]['stress_V'] > 41e6:
+                    mortal_no = mortal_no + 1
+                    mortal_stress_values.append(graph[key]['stress_V'])
+    
     print("Time to parse: %d"%(et1-st1))
     print("Time to create data structure: %d"%(et2-st2))
     print("Time to traverse disconnected: %d"%(et3-st3))
