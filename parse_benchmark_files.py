@@ -306,7 +306,7 @@ def parse_benchmark(design, spice_file, spice_out_file):
       edge['power']   = power
   print("Completed output file")
   print("Number of via edges", len(via_nets))
-  return edges, pg_unit 
+  return edges, node_edge_dict, pg_unit 
 
 def mapping_to_data_structure(discretization, edges, pg_unit):
   #nodes_end = set()
